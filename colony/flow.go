@@ -1,4 +1,4 @@
-package lemin
+package colony
 
 import (
 	"sort"

@@ -3,5 +3,4 @@
 A 0 0
 ##end
 B 1 1
-A-B
-B-A
+A-A
