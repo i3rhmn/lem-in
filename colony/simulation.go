@@ -1,62 +1,69 @@
 package colony
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
 
-// Simulate ants moving along multiple paths.
-func simulateAnts(paths [][]string, assignments [][]int) {
-
-	lastTurn := 0
-
-	// Calculate when the final ant will arrive.
-	for i, ants := range assignments {
-
-		if len(ants) == 0 {
-			continue
+// Give each next ant to the path where it can arrive earliest.
+func assignAnts(ants int, paths [][]string) [][]int {
+	assigned := make([][]int, len(paths))
+	for ant := 1; ant <= ants; ant++ {
+		best := 0
+		for i := 1; i < len(paths); i++ {
+			if len(paths[i])+len(assigned[i]) < len(paths[best])+len(assigned[best]) {
+				best = i
+			}
 		}
+		assigned[best] = append(assigned[best], ant)
+	}
+	return assigned
+}
 
-		finish := len(paths[i]) + len(ants) - 2
-
-		if finish > lastTurn {
-			lastTurn = finish
+// On turn t, ant j on a path moves to the room at index t-j.
+func simulateAnts(paths [][]string, assigned [][]int) {
+	lastTurn := 0
+	for i, ants := range assigned {
+		if len(ants) > 0 && len(paths[i])+len(ants)-2 > lastTurn {
+			lastTurn = len(paths[i]) + len(ants) - 2
 		}
 	}
-
-	// Simulate one turn at a time.
 	for turn := 1; turn <= lastTurn; turn++ {
-
 		moves := []string{}
-
 		for i, path := range paths {
-
-			ants := assignments[i]
-
-			// Find which ants are moving this turn.
-			first := turn - (len(path) - 1)
-
+			first := turn - len(path) + 1
 			if first < 0 {
 				first = 0
 			}
-
 			last := turn - 1
-
-			if last >= len(ants) {
-				last = len(ants) - 1
+			if last >= len(assigned[i]) {
+				last = len(assigned[i]) - 1
 			}
-
-			// Move every active ant one room forward.
 			for j := first; j <= last; j++ {
-
-				step := turn - j
-
-				moves = append(moves,
-					fmt.Sprintf("L%d-%s", ants[j], path[step]))
+				moves = append(moves, fmt.Sprintf("L%d-%s", assigned[i][j], path[turn-j]))
 			}
 		}
-
-		// Print all moves for this turn.
 		fmt.Println(strings.Join(moves, " "))
 	}
+}
+
+// Run joins parsing, pathfinding, assignment, and printing.
+func Run(data []byte) error {
+	farm, err := parseColony(data)
+	if err != nil {
+		return err
+	}
+	paths := findOptimizedPaths(farm.Graph, farm.Start, farm.End, farm.Ants)
+	if len(paths) == 0 {
+		return errors.New("no path from start to end")
+	}
+
+	fmt.Print(string(data))
+	if !strings.HasSuffix(string(data), "\n") {
+		fmt.Println()
+	}
+	fmt.Println()
+	simulateAnts(paths, assignAnts(farm.Ants, paths))
+	return nil
 }

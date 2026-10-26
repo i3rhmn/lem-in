@@ -1,126 +1,67 @@
-# Lem-in 🐜
+# lem-in — simple five-file Go version
 
-Lem-in is an ant colony simulation written in Go.
+A Go program that reads an ant colony file and moves the ants from `##start` to `##end` in as few turns as its selected routes allow.
 
-The goal is to move all ants from the starting room to the
-ending room in as few turns as possible while respecting
-room and tunnel restrictions.
+## Structure
 
-## Project Structure
-
+```text
 lem-in/
-├── main.go
+├── main.go                 Start the program, read the file, report errors
 ├── go.mod
 └── colony/
-    ├── run.go
-    ├── parser.go
-    ├── graph.go
-    ├── flow.go
-    ├── solver.go
-    ├── simulation.go
-    ├── *_test.go
-    └── testdata/
+    ├── parser.go           Validate and understand ants, rooms and tunnels
+    ├── graph.go            IN/OUT capacity network + augmenting path search
+    ├── solver.go           Find multiple compatible paths and compare turns
+    ├── simulation.go       Assign ants, output their movements and run workflow
+    └── testdata/           Sample, error and audit input files
+```
 
-## How It Works
+Exactly **five Go source files** (all standard library; Go 1.20+).
 
-1. Read the input file.
-2. Validate ants, rooms, and tunnels.
-3. Construct a graph of the colony.
-4. Find suitable paths using minimum-cost flow.
-5. Distribute ants across selected paths.
-6. Simulate each turn and print movements.
+## Run
 
-## Algorithms
+From the project's root folder:
 
-### Graph Representation
-
-An adjacency list stores the connections between rooms.
-
-Example:
-
-S -> [A, B]
-A -> [S, E]
-B -> [S, E]
-E -> [A, B]
-
-### Minimum-Cost Flow
-
-The solver uses a residual flow network.
-
-Intermediate rooms are split into input and output nodes
-with capacity one, preventing paths from sharing them.
-
-Reverse edges allow the solver to reconsider previous
-path selections.
-
-The program compares completion times for different
-numbers of selected paths.
-
-### Ant Distribution
-
-Ants are assigned based on path length and the number
-of ants already assigned to each path.
-
-Shorter and less congested paths are preferred.
-
-### Movement Simulation
-
-Ants move one tunnel per turn.
-
-Each intermediate room can contain only one ant.
-Each tunnel can only be used once per turn.
-
-The simulation prints only ants that move.
-
-## Running
-
-Run directly:
-
-    go run . colony/testdata/test0.txt
+```bash
+go run . colony/testdata/test0.txt
+```
 
 Or build the executable:
 
-    go build -o lem-in .
+```bash
+go build -o lem-in .
+./lem-in colony/testdata/audit/example00.txt
+```
 
-    ./lem-in colony/testdata/test0.txt
+**Input:** first line is a positive ant count, followed by rooms (`name x y`), one `##start` command, one `##end` command, and tunnels (`name-name`). Comments beginning with `#` are ignored for parsing but printed with the original input. Room names may contain hyphens if tunnel names are unambiguous.
 
-## Testing
+**Output:** original file, a blank line, then each turn of ant movements (`L1-room L2-room ...`). If the file is invalid or there is no route, output is `ERROR: invalid data format`.
 
-Run all tests:
+## How it works (read files in this order)
 
-    go test ./... -count=1
+1. **main.go** — `main()` reads the file and calls `colony.Run()`.
+2. **parser.go** — `parseColony()` builds the room inventory and graph (adjacency list).
+3. **graph.go** — splits every intermediate room into IN/OUT nodes with capacity 1. `augment()` searches the residual network for another route; reverse edges can undo an earlier choice.
+4. **solver.go** — `findOptimizedPaths()` tries different path counts, `paths()` reconstructs selected routes, and `estimatedTurns()` computes how many turns are needed for that set.
+5. **simulation.go** — `assignAnts()` distributes ants according to expected arrival time; `simulateAnts()` prints moves turn by turn. `Run()` joins all of the steps.
 
-Check code quality:
+`##start` and `##end` allow multiple ants, while every intermediate room holds at most one. Each tunnel can be used only once per turn.
 
-    go vet ./...
+## Audit testing
 
-Run race detection:
+Test the provided input files:
 
-    CGO_ENABLED=1 go test -race ./...
+```bash
+go run . colony/testdata/test0.txt
+go run . colony/testdata/greedy-trap.txt
+go run . colony/testdata/audit/example00.txt
+go run . colony/testdata/unknown-room.txt
+```
 
-Run audit examples:
+All six `colony/testdata/audit/example00.txt` through `example05.txt` were checked before packaging against the expected turn limits (6, 8, 11, 6, 6, 8). The program was also checked with separate automated tests for parser errors, movement legality, direct links, stress cases, rerouting, repeated output, and 4,000 small random graphs compared with exhaustive search. Those temporary test harness files are **not** included in this minimal five-Go-file package.
 
-    go test ./colony -run TestAuditExamples -v
+## Important limitation
 
-Run the performance benchmark:
+The residual minimum-cost flow approach considers shortest-total-length sets for different path counts and then picks the fastest result among those sets. It is stronger than repeatedly running plain BFS, but the tests do **not** constitute a proof that every possible graph gets a globally minimum-turn schedule.
 
-    go test ./colony -run '^$' -bench BenchmarkOptimizedPaths -benchmem
-
-## Error Handling
-
-Invalid inputs produce:
-
-    ERROR: invalid data format
-
-Examples include missing start/end rooms, invalid ant
-counts, duplicate rooms, invalid tunnels, and disconnected
-colonies.
-
-## Technologies
-
-- Go
-- Standard library only
-- Graph theory
-- Residual networks
-- Minimum-cost flow
-- Unit and integration testing
+See [AUDIT_GUIDE.md](AUDIT_GUIDE.md) for simple explanations and common questions.

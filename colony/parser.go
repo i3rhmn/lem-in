@@ -6,167 +6,113 @@ import (
 	"strings"
 )
 
-// Room represents a room in the colony.
+// A graph is an adjacency list: room name -> neighboring room names.
 type Room struct {
 	Name string
-	X    int
-	Y    int
+	X, Y int
 }
 
-// Colony stores all information about the ant farm.
 type Colony struct {
-	Ants  int
-	Rooms map[string]Room
-	Start string
-	End   string
-	Graph map[string][]string
+	Ants       int
+	Rooms      map[string]Room
+	Start, End string
+	Graph      map[string][]string
 }
 
-// parseColony reads and validates the entire input.
 func parseColony(data []byte) (*Colony, error) {
-
 	lines := strings.Split(string(data), "\n")
-
-	// The first line must contain a positive number of ants.
 	ants, err := strconv.Atoi(strings.TrimSpace(lines[0]))
-
 	if err != nil || ants <= 0 {
 		return nil, errors.New("invalid ant count")
 	}
+	farm := &Colony{Ants: ants, Rooms: make(map[string]Room), Graph: make(map[string][]string)}
+	seen := make(map[[2]string]bool)
+	pending, links, linkCount := "", false, 0
 
-	colony := &Colony{
-		Ants:  ants,
-		Rooms: make(map[string]Room),
-		Graph: make(map[string][]string),
-	}
-
-	seenTunnels := make(map[[2]string]bool)
-
-	pending := ""
-	readingLinks := false
-	linkCount := 0
-
-	// Skip the ant count and read the remaining lines.
 	for _, raw := range lines[1:] {
-
 		line := strings.TrimSpace(raw)
-
 		if line == "" {
 			continue
 		}
-
-		// Handle start and end commands.
 		if line == "##start" || line == "##end" {
-
-			if readingLinks || pending != "" {
-				return nil, errors.New("invalid command position")
+			if pending != "" || links {
+				return nil, errors.New("invalid command")
 			}
-
 			if line == "##start" {
-
-				if colony.Start != "" {
+				if farm.Start != "" {
 					return nil, errors.New("duplicate start")
 				}
-
 				pending = "start"
-
 			} else {
-
-				if colony.End != "" {
+				if farm.End != "" {
 					return nil, errors.New("duplicate end")
 				}
-
 				pending = "end"
 			}
-
 			continue
 		}
-
-		// Ignore comments and unknown commands.
-		if strings.HasPrefix(line, "#") {
+		if strings.HasPrefix(line, "#") { // Comments and unknown commands.
 			continue
 		}
 
 		parts := strings.Fields(line)
-
-		// Read rooms before the tunnel section.
-		if !readingLinks && len(parts) == 3 {
-
+		if !links && len(parts) == 3 {
 			name := parts[0]
-
-			// Validate the room name.
-			if name == "" ||
-				strings.HasPrefix(name, "L") ||
-				strings.HasPrefix(name, "#") {
-
+			if strings.HasPrefix(name, "L") || strings.HasPrefix(name, "#") {
 				return nil, errors.New("invalid room name")
 			}
-
-			// Room names must be unique.
-			if _, exists := colony.Rooms[name]; exists {
+			if _, exists := farm.Rooms[name]; exists {
 				return nil, errors.New("duplicate room")
 			}
-
-			// Validate coordinates.
-			x, errX := strconv.Atoi(parts[1])
-			y, errY := strconv.Atoi(parts[2])
-
-			if errX != nil || errY != nil {
+			x, xerr := strconv.Atoi(parts[1])
+			y, yerr := strconv.Atoi(parts[2])
+			if xerr != nil || yerr != nil {
 				return nil, errors.New("invalid coordinates")
 			}
-
-			// Store the room.
-			colony.Rooms[name] = Room{
-				Name: name,
-				X:    x,
-				Y:    y,
-			}
-
-			colony.Graph[name] = []string{}
-
-			// Assign the start or end room.
+			farm.Rooms[name] = Room{name, x, y}
+			farm.Graph[name] = []string{}
 			if pending == "start" {
-				colony.Start = name
-			} else if pending == "end" {
-				colony.End = name
+				farm.Start = name
 			}
-
+			if pending == "end" {
+				farm.End = name
+			}
 			pending = ""
 			continue
 		}
-
-		// A command must be followed by a room.
-		// Tunnel definitions must contain one token.
 		if pending != "" || len(parts) != 1 {
 			return nil, errors.New("invalid room or tunnel")
 		}
-
-		// Identify the two connected rooms.
-		a, b, err := resolveTunnel(line, colony.Rooms)
-
-		if err != nil {
-			return nil, err
+		// A tunnel splits at a '-' that separates two known room names.
+		a, b, matches := "", "", 0
+		for i := 1; i < len(line)-1; i++ {
+			if line[i] != '-' {
+				continue
+			}
+			left, right := line[:i], line[i+1:]
+			_, leftOK := farm.Rooms[left]
+			_, rightOK := farm.Rooms[right]
+			if leftOK && rightOK {
+				a, b, matches = left, right, matches+1
+			}
 		}
-
-		// Validate and store the tunnel.
-		err = addTunnel(colony.Graph, seenTunnels, a, b)
-
-		if err != nil {
-			return nil, err
+		if matches != 1 || a == b {
+			return nil, errors.New("invalid tunnel")
 		}
-
-		readingLinks = true
-		linkCount++
+		if a > b {
+			a, b = b, a
+		}
+		key := [2]string{a, b}
+		if seen[key] {
+			return nil, errors.New("duplicate tunnel")
+		}
+		seen[key] = true
+		farm.Graph[a] = append(farm.Graph[a], b)
+		farm.Graph[b] = append(farm.Graph[b], a)
+		links, linkCount = true, linkCount+1
 	}
-
-	// Check required colony information.
-	if pending != "" ||
-		colony.Start == "" ||
-		colony.End == "" ||
-		linkCount == 0 {
-
-		return nil, errors.New("incomplete colony")
+	if pending != "" || farm.Start == "" || farm.End == "" || linkCount == 0 {
+		return nil, errors.New("missing start, end, or tunnels")
 	}
-
-	return colony, nil
+	return farm, nil
 }

@@ -1,73 +1,56 @@
 package colony
 
-import "errors"
-
-// Identify two room names from a tunnel definition.
-func resolveTunnel(line string, rooms map[string]Room) (string, string, error) {
-
-	var a, b string
-	matches := 0
-
-	// Find a separator between two existing room names.
-	for i := 1; i < len(line)-1; i++ {
-
-		if line[i] != '-' {
-			continue
-		}
-
-		left := line[:i]
-		right := line[i+1:]
-
-		if _, ok := rooms[left]; !ok {
-			continue
-		}
-
-		if _, ok := rooms[right]; !ok {
-			continue
-		}
-
-		a = left
-		b = right
-		matches++
-	}
-
-	// There must be exactly one valid interpretation.
-	if matches != 1 {
-		return "", "", errors.New("invalid tunnel")
-	}
-
-	// Prevent self-links.
-	if a == b {
-		return "", "", errors.New("self tunnel")
-	}
-
-	return a, b, nil
+// Every room (except start/end) will be split into IN and OUT nodes.
+// A capacity-one IN -> OUT edge lets a path reserve that room once.
+type edge struct {
+	to, reverse, capacity, cost int
+	fromRoom, toRoom            string
 }
 
-// Add a validated tunnel to the graph.
-func addTunnel(
-	graph map[string][]string,
-	seen map[[2]string]bool,
-	a, b string,
-) error {
+type network struct{ edges [][]*edge }
 
-	// Normalize the room order.
-	if a > b {
-		a, b = b, a
+func (f *network) add(from, to, cost int, a, b string) {
+	forward := &edge{to: to, reverse: len(f.edges[to]), capacity: 1, cost: cost, fromRoom: a, toRoom: b}
+	backward := &edge{to: from, reverse: len(f.edges[from]), cost: -cost}
+	f.edges[from] = append(f.edges[from], forward)
+	f.edges[to] = append(f.edges[to], backward)
+}
+
+// A BFS-like shortest-path search finds an augmenting route.
+// Reverse edges allow an earlier route to be rearranged.
+func (f *network) augment(start, end int) bool {
+	const inf = int(^uint(0)>>1) / 4
+	dist := make([]int, len(f.edges))
+	parent, parentEdge := make([]int, len(f.edges)), make([]int, len(f.edges))
+	queued := make([]bool, len(f.edges))
+	for i := range dist {
+		dist[i], parent[i] = inf, -1
 	}
-
-	key := [2]string{a, b}
-
-	// Prevent duplicate tunnels.
-	if seen[key] {
-		return errors.New("duplicate tunnel")
+	dist[start] = 0
+	queue := []int{start}
+	queued[start] = true
+	for head := 0; head < len(queue); head++ {
+		u := queue[head]
+		queued[u] = false
+		for i, e := range f.edges[u] {
+			if e.capacity == 0 || dist[u]+e.cost >= dist[e.to] {
+				continue
+			}
+			dist[e.to], parent[e.to], parentEdge[e.to] = dist[u]+e.cost, u, i
+			if !queued[e.to] {
+				queue = append(queue, e.to)
+				queued[e.to] = true
+			}
+		}
 	}
-
-	seen[key] = true
-
-	// Tunnels connect rooms in both directions.
-	graph[a] = append(graph[a], b)
-	graph[b] = append(graph[b], a)
-
-	return nil
+	if parent[end] == -1 {
+		return false
+	}
+	for v := end; v != start; v = parent[v] {
+		u := parent[v]
+		e := f.edges[u][parentEdge[v]]
+		e.capacity--
+		f.edges[v][e.reverse].capacity++
+	}
+	return true
 }
