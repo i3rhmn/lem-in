@@ -20,15 +20,17 @@ type Colony struct {
 }
 
 func parseColony(data []byte) (*Colony, error) {
-	lines := strings.Split(string(data), "\n")
-	ants, err := strconv.Atoi(strings.TrimSpace(lines[0]))
+	lines := strings.Split(string(data), "\n") //make them in slice
+	ants, err := strconv.Atoi(strings.TrimSpace(lines[0])) //first line - ants num
 	if err != nil || ants <= 0 {
 		return nil, errors.New("invalid ant count")
 	}
+
 	farm := &Colony{Ants: ants, Rooms: make(map[string]Room), Graph: make(map[string][]string)}
 	seen := make(map[[2]string]bool)
 	pending, links, linkCount := "", false, 0
 
+	// save rooms A,B & C, farm.start & farm.end, connections
 	for _, raw := range lines[1:] {
 		line := strings.TrimSpace(raw)
 		if line == "" {
@@ -114,5 +116,5 @@ func parseColony(data []byte) (*Colony, error) {
 	if pending != "" || farm.Start == "" || farm.End == "" || linkCount == 0 {
 		return nil, errors.New("missing start, end, or tunnels")
 	}
-	return farm, nil
+	return farm, nil //Ants, Start, End & Graph
 }

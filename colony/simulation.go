@@ -18,17 +18,29 @@ func assignAnts(ants int, paths [][]string) [][]int {
 		}
 		assigned[best] = append(assigned[best], ant)
 	}
+	// assigned = [][]int{
+    //		{1, 2, 3},
+	// }
 	return assigned
 }
 
 // On turn t, ant j on a path moves to the room at index t-j.
+// print aunts movments turn by turn
 func simulateAnts(paths [][]string, assigned [][]int) {
+	// paths = [][]string{
+    // 		{"A", "B", "C"},
+	// }
+
+	// assigned = [][]int{
+    //		{1, 2, 3},
+	// }
 	lastTurn := 0
 	for i, ants := range assigned {
 		if len(ants) > 0 && len(paths[i])+len(ants)-2 > lastTurn {
 			lastTurn = len(paths[i]) + len(ants) - 2
-		}
+		} // calc how many turns required
 	}
+
 	for turn := 1; turn <= lastTurn; turn++ {
 		moves := []string{}
 		for i, path := range paths {
@@ -46,7 +58,11 @@ func simulateAnts(paths [][]string, assigned [][]int) {
 		}
 		fmt.Println(strings.Join(moves, " "))
 	}
-}
+}	// 1	Ant 1 moves A → B	L1-B
+	// 2	Ant 1 moves B → C; ant 2 enters B	L1-C L2-B
+	// 3	Ant 2 reaches C; ant 3 enters B	L2-C L3-B
+	// 4	Ant 3 reaches C	L3-C
+	
 
 // Run joins parsing, pathfinding, assignment, and printing.
 func Run(data []byte) error {
@@ -58,12 +74,13 @@ func Run(data []byte) error {
 	if len(paths) == 0 {
 		return errors.New("no path from start to end")
 	}
+	// Returned value: [["A", "B", "C"]]
 
 	fmt.Print(string(data))
 	if !strings.HasSuffix(string(data), "\n") {
 		fmt.Println()
 	}
 	fmt.Println()
-	simulateAnts(paths, assignAnts(farm.Ants, paths))
+	simulateAnts(paths, assignAnts(farm.Ants, paths)) // two func in same file
 	return nil
 }

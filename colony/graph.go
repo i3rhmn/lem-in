@@ -9,6 +9,7 @@ type edge struct {
 
 type network struct{ edges [][]*edge }
 
+// Adds forward and reverse connections
 func (f *network) add(from, to, cost int, a, b string) {
 	forward := &edge{to: to, reverse: len(f.edges[to]), capacity: 1, cost: cost, fromRoom: a, toRoom: b}
 	backward := &edge{to: from, reverse: len(f.edges[from]), cost: -cost}
@@ -18,6 +19,8 @@ func (f *network) add(from, to, cost int, a, b string) {
 
 // A BFS-like shortest-path search finds an augmenting route.
 // Reverse edges allow an earlier route to be rearranged.
+
+//finds route and reserves it.
 func (f *network) augment(start, end int) bool {
 	const inf = int(^uint(0)>>1) / 4
 	dist := make([]int, len(f.edges))

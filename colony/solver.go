@@ -6,6 +6,8 @@ import (
 )
 
 // Extract chosen paths by following the used room-to-room edges.
+
+// It converts the selected network edges into complete paths(actual room names).
 func (f *network) paths(start, end string) [][]string {
 	next := make(map[string][]string)
 	for _, edges := range f.edges {
@@ -41,6 +43,10 @@ func (f *network) paths(start, end string) [][]string {
 	return paths
 }
 
+// paths = [][]string {
+//	{"A", "B", "C"},
+//		}
+
 // How many turns are needed if the ants use these paths?
 func estimatedTurns(paths [][]string, ants int) int64 {
 	low, high := int64(0), int64(ants)+int64(len(paths[0]))-2
@@ -63,6 +69,8 @@ func estimatedTurns(paths [][]string, ants int) int64 {
 	return low
 }
 
+//	// decide which path is better //
+//
 // Find several compatible paths; prefer the set with fewer total turns.
 func findOptimizedPaths(graph map[string][]string, start, end string, ants int) [][]string {
 	rooms := make([]string, 0, len(graph))
@@ -70,7 +78,9 @@ func findOptimizedPaths(graph map[string][]string, start, end string, ants int) 
 		rooms = append(rooms, room)
 	}
 	sort.Strings(rooms)
+	// rooms = []string{"A", "B", "C"} Ex
 
+	// make a network
 	in, out, count := make(map[string]int), make(map[string]int), 0
 	for _, room := range rooms {
 		in[room], out[room] = count, count
@@ -80,10 +90,15 @@ func findOptimizedPaths(graph map[string][]string, start, end string, ants int) 
 			count++
 		}
 	}
+	//	A         = node 0
+	//	B IN      = node 1
+	//	B OUT     = node 2
+	//	C         = node 3
+
 	f := &network{edges: make([][]*edge, count)}
 	for _, room := range rooms {
 		if room != start && room != end {
-			f.add(in[room], out[room], 0, "", "")
+			f.add(in[room], out[room], 0, "", "") //graph.go
 		}
 		neighbors := append([]string(nil), graph[room]...)
 		sort.Strings(neighbors)
@@ -103,15 +118,19 @@ func findOptimizedPaths(graph map[string][]string, start, end string, ants int) 
 	}
 	var best [][]string
 	var bestTurns int64
-	for i := 0; i < limit && f.augment(out[start], in[end]); i++ {
-		paths := f.paths(start, end)
+
+	for i := 0; i < limit && f.augment(out[start], in[end]); i++ { //graph.go
+		paths := f.paths(start, end) //solver.go
 		if len(paths) != i+1 {
 			continue
 		}
-		turns := estimatedTurns(paths, ants)
+		turns := estimatedTurns(paths, ants) // solver.go
 		if best == nil || turns < bestTurns {
 			best, bestTurns = paths, turns
 		}
 	}
 	return best
 }
+
+// best = paths
+// bestTurns = 4
